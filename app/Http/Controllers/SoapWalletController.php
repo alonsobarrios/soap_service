@@ -42,4 +42,25 @@ class SoapWalletController extends Controller
             return ['success' => 0, 'code' => 500, 'message' => $ex->getMessage(), 'data' => []];
         }
     }
+
+    public function rechargeWallet($document, $phone, $amount)
+    {
+        try {
+            $amount = (float)$amount;
+
+            $customer = Customer::where(compact('document', 'phone'))->first();
+            if (!$customer) {
+                return ['success' => 0, 'code' => 404, 'message' => 'Cliente no encontrado', 'data' => []];
+            }
+
+            if (!$amount || $amount <= 0) {
+                return ['success' => 0, 'code' => 400, 'message' => 'El monto a recargar debe ser mayor a cero', 'data' => []];
+            }
+
+            $customer->wallet->increment('balance', $amount);
+            return ['success' => 1, 'code' => 200, 'message' => 'Recarga exitosa', 'data' => []];
+        } catch (\Exception $ex) {
+            return ['success' => 0, 'code' => 500, 'message' => $ex->getMessage(), 'data' => []];
+        }
+    }
 }
