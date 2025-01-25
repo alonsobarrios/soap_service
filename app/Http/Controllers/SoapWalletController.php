@@ -95,4 +95,39 @@ class SoapWalletController extends Controller
             return ['success' => 0, 'code' => 500, 'message' => $ex->getMessage(), 'data' => []];
         }
     }
+
+    public function confirmPayment($sessionId, $token)
+    {
+        try {
+            DB::beginTransaction();
+            $session = PaymentSession::where('id', $sessionId)->where('confirmed', 0)->first();
+            if (!$session || $session->token != $token) {
+                return ['success' => 0, 'code' => 400, 'message' => 'Token inválido', 'data' => []];
+            }
+
+            $customer = $session->customer;
+            if ($customer->wallet->balance < $session->amount) {
+                return ['success' => 0, 'code' => 400, 'message' => 'Saldo insuficiente', 'data' => []];
+            }
+
+            $customer->wallet->decrement('balance', $session->amount);
+            $session->update(['confirmed' => true]);
+
+            DB::commit();
+            return ['success' => 1, 'code' => 200, 'message' => 'Pago confirmado con éxito', 'data' => []];
+        } catch (\Exception $ex) {
+            DB::rollBack();
+            return ['success' => 0, 'code' => 500, 'message' => $ex->getMessage(), 'data' => []];
+        }
+    }
+
+    public function checkBalance($document, $phone)
+    {
+        $customer = Customer::where(compact('document', 'phone'))->first();
+        if (!$customer) {
+            return ['success' => 0, 'code' => 404, 'message' => 'Cliente no encontrado'];
+        }
+
+        return ['success' => 1, 'code' => 200, 'message' => 'Consulta realizada con éxito', 'data' => ['balance' => $customer->wallet->balance]];
+    }
 }
