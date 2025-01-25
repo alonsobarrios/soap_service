@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\PaymentSession;
 use App\Models\Wallet;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class SoapWalletController extends Controller
 {
@@ -60,6 +62,36 @@ class SoapWalletController extends Controller
             $customer->wallet->increment('balance', $amount);
             return ['success' => 1, 'code' => 200, 'message' => 'Recarga exitosa', 'data' => []];
         } catch (\Exception $ex) {
+            return ['success' => 0, 'code' => 500, 'message' => $ex->getMessage(), 'data' => []];
+        }
+    }
+
+    public function makePayment($document, $phone, $amount)
+    {
+        try {
+            DB::beginTransaction();
+            $amount = (float)$amount;
+            $customer = Customer::where('document', $document)->where('phone', $phone)->first();
+
+            if (!$customer || $customer->wallet->balance < $amount) {
+                return ['success' => 0, 'code' => 400, 'message' => 'Fondos insuficientes o cliente no encontrado', 'data' => []];
+            }
+
+            $token = rand(100000, 999999);
+            $session = PaymentSession::create([
+                'customer_id' => $customer->id,
+                'token' => $token,
+                'amount' => $amount
+            ]);
+
+            Mail::raw("Su token de pago es: $token, y el ID de sesión es: $session->id", function ($message) use ($customer) {
+                $message->to($customer->email)->subject('Token de Confirmación');
+            });
+
+            DB::commit();
+            return ['success' => 1, 'code' => 200, 'message' => 'Se ha enviado un correo con el TOKEN que debe ser usado en la confirmación de la compra.', 'data' => $session->toArray()];
+        } catch (\Exception $ex) {
+            DB::rollBack();
             return ['success' => 0, 'code' => 500, 'message' => $ex->getMessage(), 'data' => []];
         }
     }
